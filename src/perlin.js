@@ -1,7 +1,7 @@
 // globals
 const canvas = document.getElementById('canvas')
 const ctx = canvas.getContext('2d')
-const cellSizePixels = 40;
+const cellSizePixels = 32;
 const xSteps = canvas.width/cellSizePixels+1
 const ySteps = canvas.height/cellSizePixels+1
 // setup random gradient vectors
@@ -14,7 +14,8 @@ const rightAndDiags = rightVecs.concat(diagonalVecs)
 // const gradientVecs = rightVecs
 // const gradientVecs = diagonalVecs
 // const gradientVecs = rightAndDiags
-const gradientVecs = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15].map(n => n*Math.PI/8).map(a => [r*Math.cos(a), r*Math.sin(a)])
+// const gradientVecs = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15].map(n => n*Math.PI/8).map(a => [r*Math.cos(a), r*Math.sin(a)])
+const gradientVecs = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31].map(n => n*Math.PI/16).map(a => [r*Math.cos(a), r*Math.sin(a)])
 
 testLog()
 renderPerlinCanvas()
@@ -45,10 +46,11 @@ function testLog () {
 
 // main function
 function renderPerlinCanvas() {
-  const seed = 2
+  const seed = 1
   const makeHash = createHashMaker(seed, gradientVecs.length)
   const t0 = performance.now();
-  drawPerlinNoise(cellSizePixels, makeHash, 3)
+  const octaves = 1
+  drawPerlinNoise(cellSizePixels, makeHash, octaves)
   const t1 = performance.now();
   const dt = Math.round(t1 - t0)
   console.log(`It took ${dt} milliseconds to draw perling noise.`);
