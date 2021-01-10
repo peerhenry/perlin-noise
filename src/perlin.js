@@ -1,66 +1,62 @@
+// globals
 const canvas = document.getElementById('canvas')
 const ctx = canvas.getContext('2d')
-
-ctx.beginPath();
-ctx.fillStyle = "#FFFFFF";
-
 const cellSize = 40;
+const gradientVecs = {};
 const xSteps = canvas.width/cellSize+1
 const ySteps = canvas.height/cellSize+1
-
 // setup gradient vectors
-const gradientVecs = {}
 for(let i = 0; i<xSteps; i++) {
   for(let j = 0; j<ySteps; j++) {
-    const rmin = 10
-    const rmax = cellSize
-    const r = (rmax-rmin)*Math.random() + rmin
+    const r = Math.sqrt(2)
     const angle = 2*Math.PI*Math.random()
     gradientVecs[`${i}-${j}`] = [r*Math.cos(angle), r*Math.sin(angle)]
   }
 }
-
-var imageData = ctx.createImageData(canvas.width, canvas.height);
-const data = imageData.data;
-const xFloats = canvas.width*4
-const yFloats = canvas.height*4
-for (var n = 0; n < data.length; n += 4) {
-// for (var n = 0; n < 3040; n += 4) { // breaks at n = 3040
-  const x = Math.floor((n % xFloats)/4)
-  const y = Math.floor((n / xFloats)/4)
-  const col = (perlin(x, y) + 1)/2
-  const amp = 128
-  data[n]     = col*amp; // red
-  data[n + 1] = col*amp; // green
-  data[n + 2] = col*amp; // blue
-  data[n + 3] = 255; // alpha
-}
-ctx.putImageData(imageData, 0, 0);
-
-drawGrid()
-for(let i = 0; i<xSteps; i++) {
-  for(let j = 0; j<ySteps; j++) {
-    drawPoint(i*cellSize,j*cellSize)
-    gradientVector = gradientVecs[`${i}-${j}`]
-    drawArrow(i*cellSize,j*cellSize, gradientVector[0], gradientVector[1])
-  }
-}
+testLog()
+renderPerlinCanvas()
 
 // test
-(function () {
-  const corners = getCorners(10, 10)
-  console.log('getCorners(10, 10)', corners)
-  const offsetVectors = getOffsetVectors(corners, 10, 10)
-  console.log('getOffsetVectors(10, 10)', offsetVectors)
+function testLog () {
+  const x = 50
+  const y = 90
+  const corners = getCorners(x, y)
+  console.log(`getCorners(${x}, ${y})`, corners)
+  const offsetVectors = getOffsetVectors(corners, x, y)
+  console.log(`getOffsetVectors(${x}, ${y})`, offsetVectors)
   const gradientVectors = getGradientVectors(corners)
-  console.log('getGradientVectors(10, 10)', gradientVectors)
+  console.log(`getGradientVectors(${x}, ${y})`, gradientVectors)
   const dotProducts = calculateDotProducts(offsetVectors, gradientVectors)
-  console.log('getGradientVectors(10, 10)', dotProducts)
-  console.log('perlin(10, 10)', perlin(10, 10))
-})()
+  console.log(`calculateDotProducts(${x}, ${y})`, dotProducts)
+  console.log(`perlin(${x}, ${y})`, perlin(x, y))
+}
+
+// main function
+function renderPerlinCanvas() {
+  drawPerlinNoise()
+  drawGrid()
+  drawGradientVectors()
+}
+
+function drawPerlinNoise() {
+  var imageData = ctx.createImageData(canvas.width, canvas.height);
+  const data = imageData.data;
+  for (var n = 0; n < data.length; n += 4) {
+    const pixelNumber = n/4
+    const x = Math.floor(pixelNumber % canvas.width)
+    const y = Math.floor(Math.floor(pixelNumber / canvas.width))
+    const col = (perlin(x, y) + 1)/2
+    const amp = 255
+    data[n]     = col*amp; // red
+    data[n + 1] = col*amp; // green
+    data[n + 2] = col*amp; // blue
+    data[n + 3] = 255; // alpha
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
 
 // A - B
-// |   |
+// | . |
 // C - D
 
 function perlin(x, y) {
@@ -74,12 +70,14 @@ function perlin(x, y) {
   const fractionals = [fracX, fracY]
   const u = fractionals.map(f => f*f*(3.0-2.0*f)) // Cubic Hermine Curve.  Same as SmoothStep()
   const [dotA, dotB, dotC, dotD] = dotProducts
-  const alpha = mix(dotA, dotB, u[0])
-  const beta = mix(dotC, dotD, u[0])
-  const value = mix(alpha, beta, u[1])
-  const normalized = (value+160)/(2*160)
+  const alpha = mix(dotA, dotC, u[1]) // not sure about the mixing, or the smoothstep thingy
+  const beta = mix(dotB, dotD, u[1])
+  const value = mix(alpha, beta, u[0])
+  // const alpha = mix(dotA, dotB, u[0]) // not sure about the mixing, or the smoothstep thingy
+  // const beta = mix(dotC, dotD, u[0])
+  // const value = mix(alpha, beta, u[1])
 
-  return normalized
+  return value
 }
 
 function mix(a, b, f) {
@@ -103,6 +101,7 @@ function getOffsetVectors(corners, x, y) {
   return corners
     .map(c => c.map(h => cellSize*h))
     .map(c => [c[0] - x,c[1] -y])
+    .map(v => v.map(x => x/cellSize))
 }
 
 function getGradientVectors(corners) {
@@ -120,7 +119,19 @@ function calculateDotProducts(offsetVectors, gradientVectors) {
   return dotProducts
 }
 
-// helper functions
+// draw gradient vectors
+
+function drawGradientVectors() {
+  ctx.fillStyle = "#FFFFFF"
+  for(let i = 0; i<xSteps; i++) {
+    for(let j = 0; j<ySteps; j++) {
+      drawPoint(i*cellSize,j*cellSize)
+      gradientVector = gradientVecs[`${i}-${j}`]
+      const amp = 20
+      drawArrow(i*cellSize,j*cellSize, amp*gradientVector[0], amp*gradientVector[1])
+    }
+  }
+}
 
 function drawPoint(x, y) {
   ctx.beginPath();
