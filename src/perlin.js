@@ -33,7 +33,11 @@ function testLog () {
 
 // main function
 function renderPerlinCanvas() {
+  const t0 = performance.now();
   drawPerlinNoise()
+  const t1 = performance.now();
+  const dt = Math.round(t1 - t0)
+  console.log(`It took ${dt} milliseconds to draw perling noise.`);
   drawGrid()
   drawGradientVectors()
 }
