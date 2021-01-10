@@ -2,15 +2,26 @@
 const canvas = document.getElementById('canvas')
 const ctx = canvas.getContext('2d')
 const cellSize = 40;
-const gradientVecs = {};
 const xSteps = canvas.width/cellSize+1
 const ySteps = canvas.height/cellSize+1
-// setup gradient vectors
+// setup random gradient vectors
+const r = Math.sqrt(2)
+const rightVecs = [[r, 0], [-r, 0], [0, r], [0, r]] // right vectors
+const diagonalVecs = [[1, 1], [1, -1], [-1, 1], [-1, -1]] // diagonal vectors
+const rightAndDiags = rightVecs.concat(diagonalVecs)
+const vecs = rightAndDiags
+
+// --- precumputed random gradient vectors
+const gradientVecs = {};
 for(let i = 0; i<xSteps; i++) {
   for(let j = 0; j<ySteps; j++) {
-    const r = Math.sqrt(2)
-    const angle = 2*Math.PI*Math.random()
-    gradientVecs[`${i}-${j}`] = [r*Math.cos(angle), r*Math.sin(angle)]
+    // random vecs
+    // const angle = 2*Math.PI*Math.random()
+    // gradientVecs[`${i}-${j}`] = [r*Math.cos(angle), r*Math.sin(angle)]
+
+    // psuedo random
+    const randomIndex = Math.floor(vecs.length*Math.random())
+    gradientVecs[`${i}-${j}`] = vecs[randomIndex]
   }
 }
 testLog()
@@ -18,38 +29,40 @@ renderPerlinCanvas()
 
 // test
 function testLog () {
+  const makeHash = createHashMaker()
   const x = 50
   const y = 90
   const corners = getCorners(x, y)
   console.log(`getCorners(${x}, ${y})`, corners)
   const offsetVectors = getOffsetVectors(corners, x, y)
-  console.log(`getOffsetVectors(${x}, ${y})`, offsetVectors)
-  const gradientVectors = getGradientVectors(corners)
-  console.log(`getGradientVectors(${x}, ${y})`, gradientVectors)
+  console.log(`getOffsetVectors(corners, ${x}, ${y})`, offsetVectors)
+  const gradientVectors = getGradientVectors(makeHash, corners)
+  console.log(`getGradientVectors([${x}, ${y}])`, gradientVectors)
   const dotProducts = calculateDotProducts(offsetVectors, gradientVectors)
   console.log(`calculateDotProducts(${x}, ${y})`, dotProducts)
-  console.log(`perlin(${x}, ${y})`, perlin(x, y))
+  console.log(`perlin(${x}, ${y})`, perlin(makeHash, x, y))
 }
 
 // main function
 function renderPerlinCanvas() {
+  const makeHash = createHashMaker()
   const t0 = performance.now();
-  drawPerlinNoise()
+  drawPerlinNoise(makeHash)
   const t1 = performance.now();
   const dt = Math.round(t1 - t0)
   console.log(`It took ${dt} milliseconds to draw perling noise.`);
   drawGrid()
-  drawGradientVectors()
+  drawGradientVectors(makeHash)
 }
 
-function drawPerlinNoise() {
-  var imageData = ctx.createImageData(canvas.width, canvas.height);
+function drawPerlinNoise(makeHash) {
+  const imageData = ctx.createImageData(canvas.width, canvas.height);
   const data = imageData.data;
   for (var n = 0; n < data.length; n += 4) {
     const pixelNumber = n/4
     const x = Math.floor(pixelNumber % canvas.width)
     const y = Math.floor(Math.floor(pixelNumber / canvas.width))
-    const col = (perlin(x, y) + 1)/2
+    const col = (perlin(makeHash, x, y) + 1)/2
     const amp = 255
     data[n]     = col*amp; // red
     data[n + 1] = col*amp; // green
@@ -63,10 +76,10 @@ function drawPerlinNoise() {
 // | . |
 // C - D
 
-function perlin(x, y) {
+function perlin(makeHash, x, y) {
   const corners = getCorners(x, y)
   const offsetVectors = getOffsetVectors(corners, x, y)
-  const gradientVectors = getGradientVectors(corners)
+  const gradientVectors = getGradientVectors(makeHash, corners)
   const dotProducts = calculateDotProducts(offsetVectors, gradientVectors)
   // get fractional part of coordinate within cell to use for interpolation
   const fracX = (x%cellSize)/cellSize
@@ -77,9 +90,6 @@ function perlin(x, y) {
   const alpha = mix(dotA, dotC, u[1]) // not sure about the mixing, or the smoothstep thingy
   const beta = mix(dotB, dotD, u[1])
   const value = mix(alpha, beta, u[0])
-  // const alpha = mix(dotA, dotB, u[0]) // not sure about the mixing, or the smoothstep thingy
-  // const beta = mix(dotC, dotD, u[0])
-  // const value = mix(alpha, beta, u[1])
 
   return value
 }
@@ -108,9 +118,20 @@ function getOffsetVectors(corners, x, y) {
     .map(v => v.map(x => x/cellSize))
 }
 
-function getGradientVectors(corners) {
-  return corners
-  .map(c => gradientVecs[`${c[0]}-${c[1]}`])
+function getGradientVectors(makeHash, corners) {
+  // using precomputed gradient vecs
+  // return corners
+  // .map(c => gradientVecs[`${c[0]}-${c[1]}`])
+  // using psuedorandom gradient vecs with hash
+  return corners.map(([i,j]) => vecs[makeHash(i,j)])
+}
+
+function createHashMaker(seed = 1, range = 8) {
+  return (i, j) => {
+    const changer = Math.cos(seed) + 1.5
+    const nr = 12345*changer*(Math.cos(45.33*changer*i) + Math.cos(33.45*changer*j) + 13)
+    return Math.floor(nr) % range
+  }
 }
 
 function calculateDotProducts(offsetVectors, gradientVectors) {
@@ -125,13 +146,13 @@ function calculateDotProducts(offsetVectors, gradientVectors) {
 
 // draw gradient vectors
 
-function drawGradientVectors() {
-  ctx.fillStyle = "#FFFFFF"
+function drawGradientVectors(makeHash) {
+  ctx.fillStyle = "#FFFFFF88"
   for(let i = 0; i<xSteps; i++) {
     for(let j = 0; j<ySteps; j++) {
       drawPoint(i*cellSize,j*cellSize)
-      gradientVector = gradientVecs[`${i}-${j}`]
-      const amp = 20
+      gradientVector = vecs[makeHash(i, j)]
+      const amp = cellSize/2.8
       drawArrow(i*cellSize,j*cellSize, amp*gradientVector[0], amp*gradientVector[1])
     }
   }
@@ -139,13 +160,13 @@ function drawGradientVectors() {
 
 function drawPoint(x, y) {
   ctx.beginPath();
-  ctx.arc(x, y, 3, 0, 2 * Math.PI); // x, y, r, sAngle, eAngle, counterclockwise
+  ctx.arc(x, y, 1, 0, 2 * Math.PI); // x, y, r, sAngle, eAngle, counterclockwise
   ctx.fill();
 }
 
 function drawArrow(x, y, dx, dy) {
   ctx.beginPath();
-  ctx.strokeStyle = "#FF0000";
+  ctx.strokeStyle = "#FF000088";
   ctx.lineWidth = 2;
   ctx.moveTo(x,y);
   ctx.lineTo(x+dx,y+dy);
