@@ -1,7 +1,7 @@
 // globals
 const canvas = document.getElementById('canvas')
 const ctx = canvas.getContext('2d')
-const cellSizePixels = 32;
+const cellSizePixels = 128;
 const xSteps = canvas.width/cellSizePixels+1
 const ySteps = canvas.height/cellSizePixels+1
 // setup random gradient vectors
@@ -15,7 +15,9 @@ const rightAndDiags = rightVecs.concat(diagonalVecs)
 // const gradientVecs = diagonalVecs
 // const gradientVecs = rightAndDiags
 // const gradientVecs = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15].map(n => n*Math.PI/8).map(a => [r*Math.cos(a), r*Math.sin(a)])
-const gradientVecs = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31].map(n => n*Math.PI/16).map(a => [r*Math.cos(a), r*Math.sin(a)])
+const range = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]
+const gradientVecs = range.map(n => n*Math.PI/16).map(a => [r*Math.cos(a), r*Math.sin(a)])
+const rangeRandomized = shuffle(range)
 
 testLog()
 renderPerlinCanvas()
@@ -23,25 +25,44 @@ renderPerlinCanvas()
 function createHashMaker(seed = 1, range = 8) {
   return (i, j) => {
     const changer = Math.cos(seed) + 1.5
-    const nr = 12345*changer*(Math.cos(45.33*changer*i) + Math.cos(33.45*changer*j) + 13)
-    return Math.floor(nr) % range
+    const cosi = Math.cos(45.33*changer*i)/2+1
+    const cosj = Math.cos(3.45*changer*j)/2+1
+    const nr = 12345*changer*(cosi*cosi*cosi + cosj*cosj*cosj + 13)
+    // const nr = 12345.3576*changer*(45.33*changer*i + 33.45*changer*j + 13.3456)
+    return rangeRandomized[Math.floor(nr) % range]
   }
+}
+
+function shuffle(array) {
+  var currentIndex = array.length, temporaryValue, randomIndex;
+  // While there remain elements to shuffle...
+  while (0 !== currentIndex) {
+    // Pick a remaining element...
+    randomIndex = Math.floor(Math.random() * currentIndex);
+    currentIndex -= 1;
+    // And swap it with the current element.
+    temporaryValue = array[currentIndex];
+    array[currentIndex] = array[randomIndex];
+    array[randomIndex] = temporaryValue;
+  }
+  return array;
 }
 
 // test
 function testLog () {
+  console.log(`shuffle([1,2,3,4,5,6,7,8])`, shuffle([1,2,3,4,5,6,7,8]))
   const makeHash = createHashMaker(1, gradientVecs.length)
   const x = 50
   const y = 90
-  const corners = getCorners(cellSizePixels, x, y)
+  const corners = getCorners(x, y)
   console.log(`getCorners(cellSizePixels, ${x}, ${y})`, corners)
-  const offsetVectors = getOffsetVectors(cellSizePixels, corners, x, y)
+  const offsetVectors = getOffsetVectors(corners, x, y)
   console.log(`getOffsetVectors(cellSizePixels, corners, ${x}, ${y})`, offsetVectors)
   const gradientVectors = getGradientVectors(makeHash, corners)
   console.log(`getGradientVectors([${x}, ${y}])`, gradientVectors)
   const dotProducts = calculateDotProducts(offsetVectors, gradientVectors)
   console.log(`calculateDotProducts(${x}, ${y})`, dotProducts)
-  console.log(`perlin(cellSizePixels, makeHash, ${x}, ${y})`, perlin(cellSizePixels, makeHash, x, y, 1))
+  console.log(`perlin(cellSizePixels, makeHash, ${x}, ${y})`, perlin(makeHash, x, y, 1))
 }
 
 // main function
@@ -49,7 +70,7 @@ function renderPerlinCanvas() {
   const seed = 1
   const makeHash = createHashMaker(seed, gradientVecs.length)
   const t0 = performance.now();
-  const octaves = 1
+  const octaves = 6
   drawPerlinNoise(cellSizePixels, makeHash, octaves)
   const t1 = performance.now();
   const dt = Math.round(t1 - t0)
@@ -65,9 +86,9 @@ function drawPerlinNoise(baseCellSize, makeHash, octaves) {
   let max = 0
   for (var n = 0; n < data.length; n += 4) {
     const pixelNumber = n/4
-    const x = Math.floor(pixelNumber % canvas.width)
-    const y = Math.floor(Math.floor(pixelNumber / canvas.width))
-    const col = (perlin(baseCellSize, makeHash, x, y, octaves) + 1)/2
+    const x = Math.floor(pixelNumber % canvas.width) / baseCellSize
+    const y = Math.floor(Math.floor(pixelNumber / canvas.width)) / baseCellSize
+    const col = (perlin(makeHash, x, y, octaves) + 1)/2
     if(col<min) min = col
     if(col>max) max = col
     const amp = 255
@@ -85,25 +106,25 @@ function drawPerlinNoise(baseCellSize, makeHash, octaves) {
 // | . |
 // C - D
 
-function perlin(baseCellSize, makeHash, x, y, octaves = 1) {
+function perlin(makeHash, x, y, octaves = 1) {
   if(!Number.isInteger(octaves) || octaves < 1) throw 'octaves must be an integer > 0'
 
-  const getPerlinValue = (cellSize) => {
-    const corners = getCorners(cellSize, x, y)
-    const offsetVectors = getOffsetVectors(cellSize, corners, x, y)
+  const getPerlinValue = (octave) => {
+    const mul = Math.pow(2, octave-1)
+    const ox = x*mul // using different x,y for getCorners and or fracX leads to cool effects...
+    const oy = y*mul
+    const corners = getCorners(ox, oy)
+    const offsetVectors = getOffsetVectors(corners, ox, oy)
     const gradientVectors = getGradientVectors(makeHash, corners)
     const dotProducts = calculateDotProducts(offsetVectors, gradientVectors)
     // get fractional part of coordinate within cell to use for interpolation
-    const fracX = (x%cellSize)/cellSize
-    const fracY = (y%cellSize)/cellSize
+    const fracX = ox%1
+    const fracY = oy%1
     const fractionals = [fracX, fracY]
     const smoothstep = f => f*f*(3.0-2.0*f)
     // const fade = t => t*t*t*(t*(t*6-15)+10)
     const u = fractionals.map(smoothstep)
     const [dotA, dotB, dotC, dotD] = dotProducts
-    // const alpha = mix(dotA, dotB, u[0]) // not sure about the mixing, or the smoothstep thingy
-    // const beta = mix(dotC, dotD, u[0])
-    // const value = mix(alpha, beta, u[1])
     const alpha = mix(dotA, dotC, u[1]) // not sure about the mixing, or the smoothstep thingy
     const beta = mix(dotB, dotD, u[1])
     const value = mix(alpha, beta, u[0])
@@ -113,8 +134,7 @@ function perlin(baseCellSize, makeHash, x, y, octaves = 1) {
   let acc = 0
   for(let oct = 1; oct <= octaves; oct++) {
     const divider = Math.pow(2, oct-1)
-    const cellSize = baseCellSize/divider
-    acc += getPerlinValue(cellSize)/divider
+    acc += getPerlinValue(oct)/divider
   }
   const normalizer = 2 - 1/Math.pow(2, octaves-1)
   return acc/normalizer
@@ -124,10 +144,10 @@ function mix(a, b, f) {
   return b*f + a*(1-f)
 }
 
-function getCorners(cellSize, x, y) {
-  const prevGridi = Math.floor(x/cellSize)
+function getCorners(x, y) {
+  const prevGridi = Math.floor(x)
   const nextGridi = prevGridi + 1
-  const prevGridj = Math.floor(y/cellSize)
+  const prevGridj = Math.floor(y)
   const nextGridj = prevGridj + 1
   return [
     [prevGridi, prevGridj],
@@ -137,11 +157,10 @@ function getCorners(cellSize, x, y) {
   ]
 }
 
-function getOffsetVectors(cellSize, corners, x, y) {
+function getOffsetVectors(corners, x, y) {
   return corners
-    .map(c => [cellSize*c[0],cellSize*c[1]])
-    .map(c => [c[0] - x,c[1] -y])
-    .map(v => v.map(x => x/cellSize))
+    // .map(c => [c[0] - x,c[1] -y])
+    .map(c => [x - c[0],y - c[1]])
 }
 
 function getGradientVectors(makeHash, corners) {
